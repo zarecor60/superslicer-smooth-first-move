@@ -5,7 +5,13 @@ import os
 import re
 import shutil
 import tempfile
+import textwrap
 
+header_text = textwrap.dedent("""\
+    ; Processed by slic3r-smooth-first-move [by zarecor60, original by nmaggioni]
+    ; (https://github.com/zarecor60/slic3r-smooth-first-move)
+    ;
+""")
 
 class TermColors:
     HEADER = '\033[95m'
@@ -21,22 +27,38 @@ class TermColors:
 def find_lines(lines):
     z_line, skirt_line = "", ""
     for line in lines:
-        if "; move to next layer (0)" in line:
-            if line[0] is ';':
+	
+        if ";LAYER_CHANGE" in line:
+            if line[0] == '; Processed by slic3r-smooth-first-move':
                 print(TermColors.FAIL + "File seems to have already been patched." + TermColors.ENDC)
                 quit(2)
             z_line = line
-        elif "; move to first skirt point" in line and not skirt_line:
             skirt_line = line
+    
     return (z_line, skirt_line)
 
+def get_linenum(lines):
+    z_line = 0
+    x_line = 0
+
+    for i,line in enumerate(lines):
+
+        if "; Post-Processed by slic3r-smooth-first-move" in line:
+            print(TermColors.FAIL + "File has already been patched!" + TermColors.ENDC)
+            quit(2)
+        if re.search('G1 Z[0-9\.]+', line):
+            z_line=i
+        if re.search('G1 X[0-9\.]+ Y[0-9\.]+', line):
+            x_line=i
+            return(z_line,x_line)
 
 def patch_lines(f, lines, z_line, skirt_line, joined_line):
     for i, line in enumerate(lines):
         if line == z_line:
-            lines[i] = '; ' + line
+            lines[i] = ''
         elif line == skirt_line:
             lines[i] = joined_line
+    lines.insert(0,header_text)
     f.seek(0)
     f.truncate()
     f.writelines(lines)
@@ -51,17 +73,20 @@ def backup_file(original_path):
 def process(gcode_path):
     with open(gcode_path, "r+") as f:
         lines = f.readlines()
-        z_line, skirt_line = find_lines(lines)
-        if z_line and skirt_line:
-            z_line_trimmed = z_line[:z_line.find(';') - 1]
-            skirt_line_trimmed = skirt_line[:skirt_line.find(';') - 1]
-            print(("Joining lines " +
-                   TermColors.HEADER + "\"{}\"" + TermColors.ENDC + " & " +
-                   TermColors.HEADER + "\"{}\"" + TermColors.ENDC + "...").format(z_line_trimmed, skirt_line_trimmed))
-            z_line_coord = re.search('Z[0-9\.]+', z_line_trimmed).group()
-            z_line_speed = re.search('F[0-9\.]+', z_line_trimmed).group()
-            skirt_line_coords = re.search('X[0-9\.]+ Y[0-9\.]+', skirt_line_trimmed).group()
-            joined_line = "G1 {} {} {} ; move to next layer (0) and to first skirt point\n".format(
+        # Go find the line numbers of the initial moves
+        z_line, x_line = get_linenum(lines)
+        if z_line and x_line:
+            # Extract the text of the initial moves
+            z_line_text = lines[z_line]
+            x_line_text = lines[x_line]
+            
+            #print(("Joining lines " +
+            #       TermColors.HEADER + "\"{}\"" + TermColors.ENDC + " & " +
+            #       TermColors.HEADER + "\"{}\"" + TermColors.ENDC + "...").format(z_line_trimmed, skirt_line_trimmed))
+            z_line_coord = re.search('Z[0-9\.]+', z_line_text).group()
+            z_line_speed = re.search('F[0-9\.]+', z_line_text).group()
+            skirt_line_coords = re.search('X[0-9\.]+ Y[0-9\.]+', x_line_text).group()
+            joined_line = "G1 {} {} {} \n".format(
                 skirt_line_coords,
                 z_line_coord,
                 z_line_speed
@@ -71,7 +96,7 @@ def process(gcode_path):
             temp_path = backup_file(gcode_path)
             print("Backing up GCode file to new copy: {}".format(temp_path))
             print("Writing changes to original GCode file...")
-            patch_lines(f, lines, z_line, skirt_line, joined_line)
+            patch_lines(f, lines, z_line_text, x_line_text, joined_line)
             print(TermColors.OKGREEN + "Done!" + TermColors.ENDC)
         else:
             print(TermColors.FAIL + "Needed lines not found, nothing to join." + TermColors.ENDC)
