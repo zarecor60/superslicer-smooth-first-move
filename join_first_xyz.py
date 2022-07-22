@@ -40,15 +40,20 @@ def find_lines(lines):
 def get_linenum(lines):
     z_line = 0
     x_line = 0
+    in_custom = False
 
     for i,line in enumerate(lines):
 
         if "; Post-Processed by slic3r-smooth-first-move" in line:
             print(TermColors.FAIL + "File has already been patched!" + TermColors.ENDC)
             quit(2)
-        if re.search('G1 Z[0-9\.]+', line):
+        if re.search('; custom gcode:', line):
+            in_custom = True
+        if re.search('; custom gcode end:', line):
+            in_custom = False
+        if re.search('G1 Z[0-9\.]+', line) and not in_custom:
             z_line=i
-        if re.search('G1 X[0-9\.]+ Y[0-9\.]+', line):
+        if re.search('G1 X[0-9\.]+ Y[0-9\.]+', line) and not in_custom:
             x_line=i
             return(z_line,x_line)
 
