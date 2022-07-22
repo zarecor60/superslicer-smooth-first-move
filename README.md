@@ -1,7 +1,7 @@
 # slic3r-smooth-first-move
 A Slic3r post-processing script that joins the initial XY &amp; Z movements, producing a smoother initial move and preventing marks/oozes on the bed.
 
-**Currently works with skirts only, if you are not using a skirt then this script won't work for you.** Adding support for other types of first layers is quite trivial anyhow.
+This **should** work as long as the start_gcode and per-layer gcode don't include any G1 moves
 
 ```
 usage: join_first_xyz.py [-h] <GCode file>
