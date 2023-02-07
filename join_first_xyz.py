@@ -27,7 +27,7 @@ class TermColors:
 def find_lines(lines):
     z_line, skirt_line = "", ""
     for line in lines:
-	
+
         if ";LAYER_CHANGE" in line:
             if line[0] == '; Processed by slic3r-smooth-first-move':
                 print(TermColors.FAIL + "File seems to have already been patched." + TermColors.ENDC)
